@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dynamic GNN Seizure Detection</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{margin:0;font-family:Segoe UI;background:#f8fafc;}
+header{
+  background:linear-gradient(135deg,#1e3a8a,#0ea5e9);
+  color:white;padding:1.5rem;
+}
+.layout{display:flex;min-height:calc(100vh - 90px);}
+.sidebar{
+  width:220px;background:#020617;color:white;padding:1rem;
+}
+.sidebar button{
+  width:100%;margin-bottom:.6rem;
+  background:#0f172a;color:white;
+  border:none;padding:.6rem;border-radius:6px;
+  cursor:pointer;text-align:left;
+}
+.content{flex:1;padding:2rem;}
+.card{
+  background:white;padding:1.5rem;border-radius:10px;
+  box-shadow:0 10px 20px rgba(0,0,0,.05);
+  margin-bottom:1.5rem;
+}
+.hidden{display:none;}
+.badge{padding:.4rem .8rem;border-radius:999px;font-weight:600;}
+.safe{background:#dcfce7;color:#16a34a;}
+.seizure{background:#fee2e2;color:#dc2626;}
+canvas{width:100%;height:260px;background:#020617;border-radius:8px;}
+button,input{
+  width:100%;padding:.7rem;margin-top:.6rem;
+  border-radius:8px;border:1px solid #cbd5f5;
+}
+button{background:#1e3a8a;color:white;border:none;}
+ul{padding-left:1.2rem;}
+h3{margin-top:0;}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>Dynamic GNN-Based Seizure Detection</h1>
+<p>EEG Graph Neural Network Clinical Dashboard</p>
+</header>
+
+<div class="layout">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <button onclick="show('dashboard')">Dashboard</button>
+  <button onclick="show('details')">Detailed Graphs</button>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="content">
+
+<!-- ================= DASHBOARD ================= -->
+<div id="dashboard" class="page">
+
+  <div class="card">
+    <h3>Analyze EEG</h3>
+    <input id="eegInput" placeholder="12,11,10,9,8,7,6,5">
+    <button onclick="analyze()">Analyze EEG</button>
+
+    <p style="margin-top:1rem;">
+      Current Prediction:
+      <span id="status" class="badge safe">Normal</span>
+    </p>
+
+    <ul id="details">
+      <li>EEG activity is within normal range.</li>
+    </ul>
+  </div>
+
+  <!-- ===== GRAPH 1 ===== -->
+  <div class="card">
+    <h3>EEG Channel Strength (Bar Graph)</h3>
+    <canvas id="barChart"></canvas>
+  </div>
+
+  <!-- ===== GRAPH 2 ===== -->
+  <div class="card">
+    <h3>Average EEG vs Seizure Threshold</h3>
+    <canvas id="avgChart"></canvas>
+  </div>
+
+</div>
+
+<!-- ================= DETAILED GRAPHS ================= -->
+<div id="detailsPage" class="page hidden">
+  <div class="card">
+    <h3>Graph-Based Channel Connectivity</h3>
+    <canvas id="graphCanvas"></canvas>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+/* ---------------- GLOBAL EEG DATA ---------------- */
+let eeg = [12,11,10,9,8,7,6,5];
+
+/* ---------------- CANVAS SETUP ---------------- */
+const barC = document.getElementById("barChart");
+const avgC = document.getElementById("avgChart");
+const graphC = document.getElementById("graphCanvas");
+
+const barCtx = barC.getContext("2d");
+const avgCtx = avgC.getContext("2d");
+const graphCtx = graphC.getContext("2d");
+
+barC.width = avgC.width = graphC.width = 800;
+barC.height = avgC.height = graphC.height = 260;
+
+/* ---------------- NAVIGATION ---------------- */
+function show(page){
+  document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));
+  if(page==="dashboard") document.getElementById("dashboard").classList.remove("hidden");
+  if(page==="details") {
+    document.getElementById("detailsPage").classList.remove("hidden");
+    drawConnectivityGraph();
+  }
+}
+
+/* ---------------- ANALYZE EEG ---------------- */
+function analyze(){
+  eeg = document.getElementById("eegInput").value
+    .split(",").map(Number);
+
+  const avg = eeg.reduce((a,b)=>a+b,0)/eeg.length;
+  const seizure = avg > 20;
+
+  const status = document.getElementById("status");
+  const details = document.getElementById("details");
+
+  if(seizure){
+    status.textContent="Seizure Detected";
+    status.className="badge seizure";
+    details.innerHTML=`
+      <li><b>High abnormal EEG activity detected</b></li>
+      <li>Strong channel synchronization observed</li>
+      <li>Rapid temporal fluctuations present</li>
+      <li><b>Recommendation:</b> Seek medical attention</li>
+    `;
+  }else{
+    status.textContent="Normal";
+    status.className="badge safe";
+    details.innerHTML=`
+      <li>EEG activity is within normal range</li>
+      <li>No abnormal synchronization detected</li>
+    `;
+  }
+
+  drawBarChart();
+  drawAvgChart(avg);
+}
+
+/* ---------------- BAR GRAPH ---------------- */
+function drawBarChart(){
+  barCtx.clearRect(0,0,800,260);
+  const max = Math.max(...eeg);
+  const barW = 60;
+
+  eeg.forEach((v,i)=>{
+    const x = 40 + i * (barW + 20);
+    const h = (v / max) * 180;
+    const y = 220 - h;
+
+    barCtx.fillStyle = "#38bdf8";
+    barCtx.fillRect(x,y,barW,h);
+
+    barCtx.fillStyle = "white";
+    barCtx.fillText("Ch"+(i+1), x+15, 240);
+  });
+}
+
+/* ---------------- AVG THRESHOLD GRAPH ---------------- */
+function drawAvgChart(avg){
+  avgCtx.clearRect(0,0,800,260);
+
+  // threshold line
+  avgCtx.strokeStyle="#dc2626";
+  avgCtx.beginPath();
+  avgCtx.moveTo(50,160);
+  avgCtx.lineTo(750,160);
+  avgCtx.stroke();
+  avgCtx.fillStyle="white";
+  avgCtx.fillText("Seizure Threshold",60,150);
+
+  // avg point
+  const y = 160 - avg * 3;
+  avgCtx.fillStyle="#22c55e";
+  avgCtx.beginPath();
+  avgCtx.arc(400,y,8,0,Math.PI*2);
+  avgCtx.fill();
+  avgCtx.fillText("Avg EEG = "+avg.toFixed(1),360,y-10);
+}
+
+/* ---------------- CONNECTIVITY GRAPH ---------------- */
+function drawConnectivityGraph(){
+  graphCtx.clearRect(0,0,800,260);
+  const cx=400,cy=130,r=90;
+  const pts=eeg.map((v,i)=>{
+    const a=i/eeg.length*2*Math.PI;
+    return {x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r,val:v};
+  });
+
+  pts.forEach((p,i)=>{
+    pts.forEach((q,j)=>{
+      if(i<j && Math.abs(p.val-q.val)<6){
+        graphCtx.strokeStyle="#60a5fa";
+        graphCtx.beginPath();
+        graphCtx.moveTo(p.x,p.y);
+        graphCtx.lineTo(q.x,q.y);
+        graphCtx.stroke();
+      }
+    });
+  });
+
+  pts.forEach(p=>{
+    graphCtx.beginPath();
+    graphCtx.arc(p.x,p.y,5+p.val/6,0,Math.PI*2);
+    graphCtx.fillStyle="#22c55e";
+    graphCtx.fill();
+  });
+}
+
+/* INIT */
+drawBarChart();
+drawAvgChart(10);
+drawConnectivityGraph();
+</script>
+
+</body>
+</html>
